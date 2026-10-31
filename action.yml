@@ -1,0 +1,94 @@
+name: AER-1 Verify
+description: >-
+  Run the AER-1 conformance corpus check in CI and verify AER-1 receipts
+  offline with aer1-verify, the standalone checker for the AER-1 verifiable
+  execution receipt standard (IETF Internet-Draft draft-zambo-aer1-26).
+author: Zambo
+branding:
+  icon: check-circle
+  color: green
+
+inputs:
+  receipt_id:
+    description: >-
+      Optional AER-1 receipt id. When set, the action fetches the hosted
+      verification for this receipt, requires the hosted status to be
+      verified, and then re-checks the receipt offline with aer1-verify.
+    required: false
+    default: ''
+  corpus_url:
+    description: URL of the AER-1 corpus manifest JSON.
+    required: false
+    default: 'https://zambo.dev/aer1/corpus.json'
+  vectors_path:
+    description: >-
+      Optional path, relative to your workspace, to a corpus tree you
+      already have (a directory containing index.json, base/, and
+      conformance.py). When set, the corpus is not downloaded.
+    required: false
+    default: ''
+  aer1_verify_version:
+    description: Version of the aer1-verify package to install from PyPI.
+    required: false
+    default: '0.2.19'
+
+outputs:
+  corpus_digest:
+    description: The evaluated-set digest reported by the conformance run.
+    value: ${{ steps.corpus.outputs.digest }}
+  corpus_counts:
+    description: The vector and check counts reported by the conformance run.
+    value: ${{ steps.corpus.outputs.counts }}
+
+runs:
+  using: composite
+  steps:
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+
+    - name: Install aer1-verify
+      shell: bash
+      run: |
+        python -m pip install --quiet "aer1-verify==${{ inputs.aer1_verify_version }}"
+        aer1-verify --version
+
+    - name: AER-1 conformance corpus check
+      id: corpus
+      shell: bash
+      env:
+        CORPUS_URL: ${{ inputs.corpus_url }}
+        VECTORS_PATH: ${{ inputs.vectors_path }}
+      run: |
+        set -euo pipefail
+        if [ -n "$VECTORS_PATH" ]; then
+          TREE="$VECTORS_PATH"
+          echo "Using caller-supplied corpus tree: $TREE"
+        else
+          TREE="$(mktemp -d)/aer1-corpus"
+          echo "Downloading the corpus manifest from $CORPUS_URL"
+          python "${{ github.action_path }}/scripts/fetch_corpus.py" "$CORPUS_URL" "$TREE"
+        fi
+        cd "$TREE"
+        python conformance.py | tee /tmp/aer1-conformance-output.txt
+        line="$(grep '^CONFORMANCE OK:' /tmp/aer1-conformance-output.txt)"
+        echo "digest=$(echo "$line" | grep -o 'sha256:[0-9a-f]*')" >> "$GITHUB_OUTPUT"
+        echo "counts=$(echo "$line" | sed 's/^CONFORMANCE OK: //; s/, sha256:.*//')" >> "$GITHUB_OUTPUT"
+        echo "### AER-1 conformance: $line" >> "$GITHUB_STEP_SUMMARY"
+
+    - name: Verify an AER-1 receipt
+      if: inputs.receipt_id != ''
+      shell: bash
+      env:
+        RECEIPT_ID: ${{ inputs.receipt_id }}
+      run: |
+        set -euo pipefail
+        curl -sS --retry 4 --retry-delay 3 --max-time 120 \
+          "https://zambo.dev/api/v2/receipt/$RECEIPT_ID/verify" \
+          -o /tmp/aer1-receipt-verify.json
+        python "${{ github.action_path }}/scripts/check_hosted.py" \
+          /tmp/aer1-receipt-verify.json "$RECEIPT_ID"
+        aer1-verify /tmp/aer1-receipt-verify.json \
+          --expected-id "$RECEIPT_ID" --json | tee /tmp/aer1-receipt-offline.json
+        echo "Receipt $RECEIPT_ID: hosted status verified, offline aer1-verify verdict PASS." >> "$GITHUB_STEP_SUMMARY"

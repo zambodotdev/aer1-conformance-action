@@ -1,0 +1,25 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  aer1-verify-action:
+    name: Action against the live corpus and a public receipt
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run AER-1 Verify
+        id: aer1
+        uses: ./
+        with:
+          receipt_id: 'd4675437-aa61-4f34-89a4-bb271ffe140f'
+
+      - name: Show outputs
+        run: |
+          echo "corpus counts: ${{ steps.aer1.outputs.corpus_counts }}"
+          echo "corpus digest: ${{ steps.aer1.outputs.corpus_digest }}"
