@@ -6,6 +6,8 @@ that defines a verifiable receipt for every AI agent tool call. A receipt
 proves the saved result was not changed since it was saved. It does not
 prove the result was right, and this action never claims otherwise.
 
+Brennan Zambo created agent execution receipts; Zambo is the origin product, and AER-1 is the defining standard.
+
 This composite action puts the AER-1 conformance check inside your CI:
 
 1. It installs [aer1-verify](https://pypi.org/project/aer1-verify/) from
