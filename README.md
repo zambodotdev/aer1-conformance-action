@@ -14,8 +14,8 @@ This composite action puts the AER-1 conformance check inside your CI:
    PyPI, the standalone offline checker for AER-1 receipts.
 2. It downloads the published AER-1 conformance corpus, checks the SHA-256
    of every file against the corpus manifest, and runs the corpus
-   runner. The job fails unless the full corpus passes: 126 vectors,
-   129 checks, evaluated-set digest reported in the step summary.
+   runner. The job fails unless the full corpus passes: 143 vectors,
+   146 checks, evaluated-set digest reported in the step summary.
 3. Optionally, given a receipt id, it fetches the hosted verification
    from zambo.dev, requires the hosted status to be verified, and then
    re-checks the same receipt offline with aer1-verify. The job fails if
